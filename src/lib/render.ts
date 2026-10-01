@@ -930,12 +930,12 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
     drawGroundTrace(ctx, base, lw, theme);
     if (scene.hasRelief) drawCurtain(ctx, top, base, theme, u);
     drawRoute(ctx, top, theme, lw, hasMap);
-    drawRouteEnds(ctx, input, top, base, progress, timeline, u, lw);
+    drawRouteEnds(ctx, input, top, progress, timeline, u, lw);
   } else if (flatPts) {
     stampPrivacy(flatPts, activity, input.privacyM, input.privacy);
     const visible = sliceXY(flatPts, head);
     drawRoute(ctx, visible, theme, lw, hasMap);
-    drawRouteEnds(ctx, input, visible, null, progress, timeline, u, lw);
+    drawRouteEnds(ctx, input, visible, progress, timeline, u, lw);
   }
   if (clipRoute) ctx.restore();
 
@@ -1081,7 +1081,6 @@ function drawRouteEnds(
   ctx: CanvasRenderingContext2D,
   input: RenderInput,
   top: XY[],
-  base: XY[] | null,
   progress: number,
   timeline: number,
   u: number,
@@ -1108,24 +1107,6 @@ function drawRouteEnds(
   const headA = headPt.a ?? 1;
   const showComet = progress > 0.01 && !done && timeline < DRAW_UNTIL && headA > (input.privacy === "omit" ? 0.99 : 0.45);
   if (!showComet) return;
-
-  if (base && base.length) {
-    const g = base[base.length - 1];
-    ctx.save();
-    ctx.strokeStyle = withAlpha("#ffffff", 0.7);
-    ctx.lineWidth = Math.max(1.5, 2.2 * u);
-    ctx.setLineDash([6 * u, 6 * u]);
-    ctx.beginPath();
-    ctx.moveTo(headPt.x, headPt.y);
-    ctx.lineTo(g.x, g.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.ellipse(g.x, g.y, 12 * u, 5 * u, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = withAlpha("#ffffff", 0.8);
-    ctx.stroke();
-    ctx.restore();
-  }
 
   ctx.save();
   ctx.fillStyle = "#ffffff";

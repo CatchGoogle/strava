@@ -1,4 +1,4 @@
-import { clamp01, rampColor, withAlpha } from "./color";
+import { clamp01, rampColor } from "./color";
 import type { WorldRoute } from "./geo";
 import type { RenderInput, Theme } from "./types";
 
@@ -269,21 +269,18 @@ function forAlphaRuns(pts: XY[], fn: (seg: XY[], alpha: number) => void) {
   flush(run, key);
 }
 
-/** Soft shadow of the route on the ground. */
+/** Soft wash of the route on the ground. */
 export function drawGroundTrace(ctx: CanvasRenderingContext2D, base: XY[], width: number, theme: Theme) {
   if (base.length < 2) return;
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const shadow = theme.mode === "dark" ? "rgba(0,0,0,0.45)" : "rgba(28,20,14,0.3)";
-  const core = withAlpha(theme.ramp[1], theme.mode === "dark" ? 0.5 : 0.35);
+  ctx.filter = `blur(${Math.max(28, width * 5)}px)`;
+  const shadow = theme.mode === "dark" ? "rgba(0,0,0,0.4)" : "rgba(28,20,14,0.22)";
   forAlphaRuns(base, (seg, alpha) => {
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = alpha * 0.75;
     ctx.strokeStyle = shadow;
-    ctx.lineWidth = width * 1.9;
-    strokePolyline(ctx, seg);
-    ctx.strokeStyle = core;
-    ctx.lineWidth = Math.max(1.5, width * 0.32);
+    ctx.lineWidth = width * 2.2;
     strokePolyline(ctx, seg);
   });
   ctx.restore();
