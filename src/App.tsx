@@ -18,7 +18,7 @@ import {
 import { LegalPage, pageFromHash } from "./legal";
 import { parseGpx } from "./lib/gpx";
 import { mapStatus, retryMap, subscribeMap } from "./lib/map";
-import { renderCard } from "./lib/render";
+import { DRAW_UNTIL, renderCard } from "./lib/render";
 import { SAMPLE_PLACES, SAMPLES } from "./lib/samples";
 import {
   activityFromStrava,
@@ -142,6 +142,8 @@ export function App() {
   const [playhead, setPlayhead] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(9);
+  const [lineSpeed, setLineSpeed] = useState(100);
+  const [speedMode, setSpeedMode] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<"image" | "video" | null>(null);
@@ -268,9 +270,11 @@ export function App() {
   useEffect(() => {
     playheadRef.current = playhead;
   }, [playhead]);
+  const videoSeconds = speedMode ? activity.distanceM / lineSpeed / DRAW_UNTIL : duration;
+
   useEffect(() => {
-    durationRef.current = duration;
-  }, [duration]);
+    durationRef.current = videoSeconds;
+  }, [videoSeconds]);
 
   const privacyMax = Math.min(1609.344, activity.distanceM * 0.45);
   const privacyStep = Math.min(units === "mi" ? 80.467 : 50, Math.max(10, privacyMax));
@@ -591,7 +595,7 @@ export function App() {
     setExportProgress(0);
     setError(null);
     try {
-      const blob = await renderVideo({ ...input, timeline: 1 }, duration, setExportProgress);
+      const blob = await renderVideo({ ...input, timeline: 1 }, videoSeconds, setExportProgress);
       const ext = blob.type.includes("mp4") ? "mp4" : "webm";
       downloadBlob(blob, posterName(ext));
       if (ext === "webm") {
@@ -1178,15 +1182,41 @@ export function App() {
             }}
           />
           <span className="times">
-            {formatVideoTime(playhead, duration)} / {formatVideoTime(1, duration)}
+            {formatVideoTime(playhead, videoSeconds)} / {formatVideoTime(1, videoSeconds)}
           </span>
           <div className="seg duration" role="radiogroup" aria-label="Video length">
             {DURATIONS.map((seconds) => (
-              <button key={seconds} aria-pressed={duration === seconds} onClick={() => setDuration(seconds)}>
+              <button
+                key={seconds}
+                aria-pressed={!speedMode && duration === seconds}
+                onClick={() => {
+                  setSpeedMode(false);
+                  setDuration(seconds);
+                }}
+              >
                 {seconds}s
               </button>
             ))}
+            <button aria-pressed={speedMode} onClick={() => setSpeedMode(true)}>
+              Speed
+            </button>
           </div>
+          {speedMode ? (
+            <label className="speed">
+              <span>
+                Line speed <em>{lineSpeed} m/s</em>
+              </span>
+              <input
+                type="range"
+                min={10}
+                max={400}
+                step={5}
+                value={lineSpeed}
+                aria-label="Line speed"
+                onChange={(event) => setLineSpeed(Number(event.target.value))}
+              />
+            </label>
+          ) : null}
           <div className="exports">
             <button className="btn ghost" onClick={() => void saveImage()} disabled={!!exporting}>
               {exporting === "image" ? "Saving…" : "Save image"}

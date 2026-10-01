@@ -265,7 +265,28 @@ section + section { margin-top: 22px; }
 
 .seg.three { grid-template-columns: repeat(3, 1fr); }
 .seg.two { grid-template-columns: repeat(2, 1fr); }
-.seg.duration { grid-template-columns: repeat(3, 1fr); min-width: 132px; }
+.seg.duration { grid-template-columns: repeat(4, 1fr); min-width: 176px; }
+
+.speed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.speed em {
+  font-style: normal;
+  font-family: "DM Mono", ui-monospace, monospace;
+  color: var(--ink);
+}
+
+.speed input {
+  flex: 1;
+  min-width: 90px;
+  accent-color: #f3ecdf;
+}
 
 .seg button {
   background: transparent;

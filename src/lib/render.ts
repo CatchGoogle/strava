@@ -26,7 +26,7 @@ import {
 } from "./scene3d";
 import type { Activity, ColorBy, PrivacyStyle, RenderInput, Theme } from "./types";
 
-const DRAW_UNTIL = 0.8;
+export const DRAW_UNTIL = 0.8;
 const GROUND_PX = 1536;
 
 function easeInOutCubic(u: number): number {
