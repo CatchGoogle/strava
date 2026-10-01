@@ -173,6 +173,8 @@ export function analyze(
     }
   }
 
+  const hrRoll = rollingHeartRate(points);
+
   const speed = smooth(instant, 4);
   for (let i = 1; i < n; i++) {
     if (speed[i] <= 0) speed[i] = speed[i - 1];
@@ -222,12 +224,69 @@ export function analyze(
     cumGain,
     cumHrSum,
     cumHrN,
+    hrRoll,
     speed,
     speedLo,
     speedHi,
     eleLo,
     eleHi,
   };
+}
+
+/** A few seconds of heart rate behind the point, so the readout tracks effort instead of the whole activity. */
+const HR_WINDOW_MS = 12_000;
+
+function rollingHeartRate(points: TrackPoint[]): number[] {
+  const n = points.length;
+  const out = new Array<number>(n).fill(Number.NaN);
+  let left = 0;
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    const hr = points[i].hr;
+    if (hr != null && Number.isFinite(hr)) {
+      sum += hr;
+      count += 1;
+    }
+    const t = points[i].time;
+    while (t != null && left < i) {
+      const earlier = points[left].time;
+      if (earlier == null || t - earlier <= HR_WINDOW_MS) break;
+      const old = points[left].hr;
+      if (old != null && Number.isFinite(old)) {
+        sum -= old;
+        count -= 1;
+      }
+      left += 1;
+    }
+    if (count > 0) out[i] = sum / count;
+  }
+  return out;
+}
+
+export function heartRateAt(activity: Activity, distanceM: number): number | null {
+  if (!activity.hasHeartRate) return null;
+  const { cumDist, hrRoll } = activity;
+  const target = clamp(distanceM, 0, activity.distanceM);
+  let lo = 0;
+  let hi = cumDist.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (cumDist[mid] <= target) lo = mid;
+    else hi = mid - 1;
+  }
+  const i = lo;
+  const j = Math.min(cumDist.length - 1, i + 1);
+  const span = cumDist[j] - cumDist[i];
+  const f = j === i || span <= 0 ? 0 : clamp((target - cumDist[i]) / span, 0, 1);
+  const a = hrRoll[i];
+  const b = hrRoll[j];
+  const aOk = Number.isFinite(a);
+  const bOk = Number.isFinite(b);
+  if (!aOk && !bOk) return null;
+  if (!aOk) return b;
+  if (!bOk) return a;
+  return a + (b - a) * f;
 }
 
 export function sliceStats(activity: Activity, distanceM: number): Slice {

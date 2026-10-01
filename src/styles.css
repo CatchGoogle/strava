@@ -50,6 +50,10 @@ button { cursor: pointer; }
   grid-template-columns: 332px minmax(0, 1fr);
 }
 
+.studio[hidden] {
+  display: none;
+}
+
 .panel {
   overflow: auto;
   background: var(--panel);
@@ -129,6 +133,75 @@ section + section { margin-top: 22px; }
 }
 
 .upload:hover { border-color: var(--paper); }
+
+.strava-setup,
+.strava-bar {
+  margin-bottom: 12px;
+}
+
+.strava-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.strava-setup .hint em {
+  font-style: normal;
+  font-family: "DM Mono", ui-monospace, monospace;
+  color: var(--ink);
+}
+
+.strava-setup a {
+  color: var(--paper);
+}
+
+.strava-setup .linkish {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.acts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  margin-bottom: 12px;
+  overflow: auto;
+}
+
+.act {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+}
+
+.act strong {
+  display: block;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.act small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.act[aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--paper-ink);
+}
+
+.act[aria-pressed="true"] small {
+  color: #5c5348;
+}
+
+.act:disabled {
+  opacity: 0.6;
+}
 
 .summary {
   margin: 12px 0 0;
@@ -223,7 +296,8 @@ section + section { margin-top: 22px; }
   font-size: 12px;
 }
 
-.field input[type="text"] {
+.field input[type="text"],
+.field input[type="password"] {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -281,6 +355,133 @@ section + section { margin-top: 22px; }
   background: none;
   color: var(--paper);
   text-decoration: underline;
+}
+
+.strava-connect {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 0;
+}
+
+.strava-connect img {
+  display: block;
+  height: 48px;
+  width: auto;
+}
+
+.strava-connect:disabled {
+  opacity: 0.45;
+}
+
+.strava-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.consent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 10px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.consent input {
+  margin-top: 3px;
+}
+
+.view-strava {
+  display: inline-block;
+  margin-top: 8px;
+  color: #fc5200;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.notice {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #142018;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.strava-notice {
+  margin-bottom: 12px;
+}
+
+.strava-notice p,
+.strava-notice ul {
+  margin: 0;
+}
+
+.strava-notice ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.strava-notice p + p {
+  margin-top: 8px;
+}
+
+.strava-notice a,
+.legal a,
+.legal-links a {
+  color: var(--paper);
+}
+
+.legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.legal {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 22px 80px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.legal h1 {
+  margin: 18px 0 12px;
+  font-family: Syne, sans-serif;
+  font-size: 40px;
+  letter-spacing: -0.04em;
+}
+
+.legal h2 {
+  margin: 22px 0 8px;
+  font-size: 16px;
+}
+
+.legal p {
+  margin: 0 0 10px;
+}
+
+.legal em {
+  font-style: normal;
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+
+.legal-back {
+  color: var(--paper);
+  font-size: 13px;
 }
 
 .hint.tight { margin: 10px 0 0; }

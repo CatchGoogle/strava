@@ -10,6 +10,9 @@ export type BasemapId = "none" | "dark" | "light" | "satellite";
 
 export type ChartId = "elevation" | "splits" | "none";
 
+/** How the hidden start and end of the map are drawn. */
+export type PrivacyStyle = "fade" | "omit";
+
 export type TrackPoint = {
   lat: number;
   lon: number;
@@ -23,7 +26,7 @@ export type TrackPoint = {
 export type Activity = {
   id: string;
   name: string;
-  source: "sample" | "gpx";
+  source: "sample" | "gpx" | "strava";
   fileName: string | null;
   points: TrackPoint[];
   distanceM: number;
@@ -41,6 +44,8 @@ export type Activity = {
   cumGain: number[];
   cumHrSum: number[];
   cumHrN: number[];
+  /** Heart rate at each point, averaged over the previous few seconds. */
+  hrRoll: number[];
   /** Smoothed speed in m/s, for color. */
   speed: number[];
   speedLo: number;
@@ -103,6 +108,15 @@ export type RenderInput = {
   relief: number;
   /** Camera swings in during the video and settles on the chosen angle. */
   orbit: boolean;
+  /** 1 frames the whole route. Lower moves the camera closer. */
+  camera: number;
+  /** 0 draws the route at a constant speed. 1 is a full ease-in and ease-out. */
+  ease: number;
+  /** Distance pill that follows the head of the trace. */
+  showDistanceTip: boolean;
+  /** Meters around the start and end left off the map. 0 shows the whole route. */
+  privacyM: number;
+  privacy: PrivacyStyle;
   /** Video timeline, 0–1. The finished poster is 1. */
   timeline: number;
 };

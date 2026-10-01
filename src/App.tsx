@@ -15,11 +15,30 @@ import {
   slug,
   speedLabel,
 } from "./lib/format";
+import { LegalPage, pageFromHash } from "./legal";
 import { parseGpx } from "./lib/gpx";
 import { mapStatus, retryMap, subscribeMap } from "./lib/map";
 import { renderCard } from "./lib/render";
 import { SAMPLE_PLACES, SAMPLES } from "./lib/samples";
-import type { Activity, BasemapId, ChartId, ColorBy, FormatId, RenderInput, Units, View } from "./lib/types";
+import {
+  activityFromStrava,
+  beginLogin,
+  clearCreds,
+  clearOAuthQuery,
+  clearSession,
+  exchangeCode,
+  freshSession,
+  listActivities,
+  loadCreds,
+  loadSession,
+  oauthCallback,
+  oauthStateMatches,
+  saveCreds,
+  type StravaCreds,
+  type StravaListItem,
+  type StravaSession,
+} from "./lib/strava";
+import type { Activity, BasemapId, ChartId, ColorBy, FormatId, PrivacyStyle, RenderInput, Units, View } from "./lib/types";
 
 const DURATIONS = [6, 9, 12];
 
@@ -44,6 +63,22 @@ const LOOKS: Look[] = [
   { id: "holo", name: "Hologram", apply: { theme: "tide", view: "3d", basemap: "none", colorBy: "elevation", relief: 1.1 } },
   { id: "paper", name: "Paper map", apply: { theme: "poster", view: "flat", basemap: "light", colorBy: "pace", mapOpacity: 0.9 } },
 ];
+
+function stravaAuthEnded(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : "";
+  return /expired|rejected the login|connect again/i.test(message);
+}
+
+function formatPrivacy(meters: number, unit: Units): string {
+  if (meters < 1) return "Off";
+  if (unit === "mi") {
+    const miles = meters / 1609.344;
+    if (miles < 0.1) return `${Math.round(meters * 3.28084)} ft`;
+    return `${miles.toFixed(2)} mi`;
+  }
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(2)} km`;
+}
 
 function Slider(props: {
   label: string;
@@ -99,6 +134,11 @@ export function App() {
   const [yaw, setYaw] = useState(-28);
   const [relief, setRelief] = useState(1);
   const [orbit, setOrbit] = useState(true);
+  const [ease, setEase] = useState(1);
+  const [showDistanceTip, setShowDistanceTip] = useState(true);
+  const [camera, setCamera] = useState(1);
+  const [privacyM, setPrivacyM] = useState(0);
+  const [privacy, setPrivacy] = useState<PrivacyStyle>("fade");
   const [playhead, setPlayhead] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(9);
@@ -109,8 +149,25 @@ export function App() {
   const [fontsReady, setFontsReady] = useState(false);
   const [mapTick, setMapTick] = useState(0);
   const [map, setMap] = useState(mapStatus());
+  const [creds, setCreds] = useState<StravaCreds | null>(() => loadCreds());
+  const [session, setSession] = useState<StravaSession | null>(null);
+  const [stravaActs, setStravaActs] = useState<StravaListItem[]>([]);
+  const [stravaPage, setStravaPage] = useState(1);
+  const [stravaMore, setStravaMore] = useState(false);
+  const [stravaBusy, setStravaBusy] = useState<"connect" | "list" | "more" | null>(null);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [editingCreds, setEditingCreds] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const [deletionNote, setDeletionNote] = useState<string | null>(null);
+  const [doc, setDoc] = useState(pageFromHash);
 
   const playheadRef = useRef(1);
+  const activityRef = useRef(activity);
+  const wipeRef = useRef<(options: { keepCreds: boolean; because?: "revoked" }) => void>(() => {});
+  activityRef.current = activity;
+  const easeAmount = useRef(1);
   const playingRef = useRef(false);
   const durationRef = useRef(9);
   const originRef = useRef(1);
@@ -155,11 +212,65 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    let cancel = false;
+    const callback = oauthCallback();
+    const returning = Boolean(callback.code || callback.error);
+    if (returning) clearOAuthQuery();
+
+    void (async () => {
+      try {
+        if (callback.error) {
+          if (!cancel) setError(callback.error === "access_denied" ? "Strava login was cancelled." : "Strava login failed.");
+          return;
+        }
+        let next = loadSession();
+        if (callback.code) {
+          if (!oauthStateMatches(callback.state)) {
+            if (!cancel) setError("Strava login could not be verified. Try connecting again.");
+            return;
+          }
+          if (!cancel) setStravaBusy("connect");
+          next = await exchangeCode(callback.code);
+        } else if (next) {
+          next = await freshSession(next);
+        }
+        if (!next || cancel) return;
+        setSession(next);
+        setStravaBusy("list");
+        const page = await listActivities(next, 1);
+        if (cancel) return;
+        setStravaActs(page.items);
+        setStravaPage(1);
+        setStravaMore(page.raw === 30);
+      } catch (err) {
+        if (cancel) return;
+        if (stravaAuthEnded(err)) wipeRef.current({ keepCreds: true, because: "revoked" });
+        else setError(err instanceof Error ? err.message : "Could not reach Strava.");
+      } finally {
+        if (!cancel) setStravaBusy(null);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setDoc(pageFromHash());
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  useEffect(() => {
     playheadRef.current = playhead;
   }, [playhead]);
   useEffect(() => {
     durationRef.current = duration;
   }, [duration]);
+
+  const privacyMax = Math.min(1609.344, activity.distanceM * 0.45);
+  const privacyStep = Math.min(units === "mi" ? 80.467 : 50, Math.max(10, privacyMax));
 
   const input = useMemo<RenderInput>(
     () => ({
@@ -184,6 +295,11 @@ export function App() {
       yaw,
       relief,
       orbit,
+      ease,
+      showDistanceTip,
+      camera,
+      privacyM: Math.min(privacyM, privacyMax),
+      privacy,
       timeline: 1,
     }),
     [
@@ -208,6 +324,12 @@ export function App() {
       yaw,
       relief,
       orbit,
+      ease,
+      showDistanceTip,
+      camera,
+      privacyM,
+      privacyMax,
+      privacy,
     ],
   );
 
@@ -338,6 +460,88 @@ export function App() {
     setPlaying(true);
   }
 
+  function connectSaved() {
+    if (!creds || !agreed) {
+      setError("Read the data notice and check the consent box before connecting.");
+      return;
+    }
+    setError(null);
+    beginLogin(creds.clientId);
+  }
+
+  function saveApiApp() {
+    const id = clientId.trim();
+    const secret = clientSecret.trim();
+    if (!/^\d+$/.test(id) || secret.length < 8) {
+      setError("Paste the numeric client ID and the client secret from your Strava API app.");
+      return;
+    }
+    saveCreds({ clientId: id, clientSecret: secret });
+    setCreds({ clientId: id, clientSecret: secret });
+    setClientSecret("");
+    setEditingCreds(false);
+    setError(null);
+  }
+
+  function wipeStrava(options: { keepCreds: boolean; because?: "revoked" }) {
+    clearSession();
+    setSession(null);
+    setStravaActs([]);
+    setStravaMore(false);
+    setStravaPage(1);
+    if (!options.keepCreds) {
+      clearCreds();
+      setCreds(null);
+      setClientId("");
+      setClientSecret("");
+      setEditingCreds(false);
+      setAgreed(false);
+    }
+    if (activityRef.current.source === "strava") applyActivity(SAMPLES[0]);
+    const when = new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    const lead = options.because === "revoked" ? `Strava ended this login. Deleted on ${when}.` : `Deleted on ${when}.`;
+    setDeletionNote(
+      `${lead} The Strava login, the activity list, and any Strava route loaded in this browser were removed. Activities on Strava itself were not deleted.`,
+    );
+    setError(null);
+  }
+  wipeRef.current = wipeStrava;
+
+  async function loadMoreStrava() {
+    if (!session || stravaBusy) return;
+    setStravaBusy("more");
+    setError(null);
+    try {
+      const next = await freshSession(session);
+      setSession(next);
+      const page = await listActivities(next, stravaPage + 1);
+      setStravaActs((current) => [...current, ...page.items]);
+      setStravaPage((current) => current + 1);
+      setStravaMore(page.raw === 30);
+    } catch (err) {
+      if (stravaAuthEnded(err)) wipeStrava({ keepCreds: true, because: "revoked" });
+      else setError(err instanceof Error ? err.message : "Could not load more activities.");
+    } finally {
+      setStravaBusy(null);
+    }
+  }
+
+  async function pickStrava(item: StravaListItem) {
+    if (!session || loadingId != null) return;
+    setLoadingId(item.id);
+    setError(null);
+    try {
+      const next = await freshSession(session);
+      setSession(next);
+      applyActivity(await activityFromStrava(next, item));
+    } catch (err) {
+      if (stravaAuthEnded(err)) wipeStrava({ keepCreds: true, because: "revoked" });
+      else setError(err instanceof Error ? err.message : "Could not load that activity.");
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
   async function loadFile(file: File) {
     const lower = file.name.toLowerCase();
     if (!lower.endsWith(".gpx") && !file.type.includes("xml") && !file.type.includes("gpx")) {
@@ -411,7 +615,9 @@ export function App() {
   const rideLike = activity.distanceM / Math.max(activity.movingTimeS, 1) > 5;
 
   return (
-    <div className="studio">
+    <>
+    {doc !== "studio" ? <LegalPage kind={doc} /> : null}
+    <div className="studio" hidden={doc !== "studio"}>
       <aside className="panel">
         <div className="brand">
           <svg className="mark" viewBox="0 0 36 36" aria-hidden="true">
@@ -426,12 +632,134 @@ export function App() {
           </svg>
           <div>
             <h1>TRACE</h1>
-            <p>Strava graphics</p>
+            <p>Route graphics</p>
           </div>
         </div>
 
         <section>
           <div className="section-label">ACTIVITY</div>
+          {session ? (
+            <div className="strava-bar">
+              <span>Signed in as {session.athlete}</span>
+              <span className="strava-actions">
+                <button className="linkish" onClick={() => wipeStrava({ keepCreds: true })}>
+                  Disconnect
+                </button>
+                <button className="linkish" onClick={() => wipeStrava({ keepCreds: false })}>
+                  Delete my Strava data
+                </button>
+              </span>
+            </div>
+          ) : null}
+          <StravaNotice />
+          {!creds || editingCreds ? (
+            <form
+              className="strava-setup"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveApiApp();
+              }}
+            >
+              <p className="hint tight">
+                Create your own app at{" "}
+                <a href="https://www.strava.com/settings/api" target="_blank" rel="noreferrer">
+                  strava.com/settings/api
+                </a>
+                . Set the website to this page and the Authorization Callback Domain to <em>catchgoogle.github.io</em>. The
+                secret stays in this browser.
+              </p>
+              <label className="field">
+                <span>Client ID</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={clientId}
+                  onChange={(event) => setClientId(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Client secret</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={clientSecret}
+                  onChange={(event) => setClientSecret(event.target.value)}
+                />
+              </label>
+              <button className="upload" type="submit">
+                Save API app
+              </button>
+              {creds ? (
+                <button className="linkish" type="button" onClick={() => setEditingCreds(false)}>
+                  Cancel
+                </button>
+              ) : null}
+            </form>
+          ) : session ? (
+            <div className="acts">
+              {stravaBusy === "list" || stravaBusy === "connect" ? <p className="summary quiet">Loading activities…</p> : null}
+              {stravaActs.map((item) => (
+                <button
+                  key={item.id}
+                  className="act"
+                  aria-pressed={activity.id === `strava-${item.id}`}
+                  disabled={loadingId != null}
+                  onClick={() => void pickStrava(item)}
+                >
+                  <strong>{loadingId === item.id ? "Loading…" : item.name}</strong>
+                  <small>
+                    {new Date(item.start).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                    {" · "}
+                    {item.sport}
+                    {" · "}
+                    {formatDistance(item.distance, units)} {distanceLabel(units).toLowerCase()}
+                  </small>
+                </button>
+              ))}
+              {stravaBusy == null && stravaActs.length === 0 ? (
+                <p className="summary quiet">No GPS activities on this page.</p>
+              ) : null}
+              {stravaMore ? (
+                <button className="upload" disabled={stravaBusy != null} onClick={() => void loadMoreStrava()}>
+                  {stravaBusy === "more" ? "Loading…" : "Load more"}
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="strava-setup">
+              <label className="consent">
+                <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} />
+                <span>I agree to the privacy notice and terms, and I consent to this collection.</span>
+              </label>
+              <button
+                className="strava-connect"
+                type="button"
+                aria-label="Connect with Strava"
+                disabled={!agreed || stravaBusy != null}
+                onClick={connectSaved}
+              >
+                <img
+                  src={`${import.meta.env.BASE_URL}btn_strava_connect_with_orange.svg`}
+                  alt="Connect with Strava"
+                  height={48}
+                />
+              </button>
+              <button
+                className="linkish"
+                onClick={() => {
+                  setClientId(creds.clientId);
+                  setClientSecret("");
+                  setEditingCreds(true);
+                }}
+              >
+                Change API app
+              </button>
+              <button className="linkish" onClick={() => wipeStrava({ keepCreds: false })}>
+                Delete my Strava data
+              </button>
+            </div>
+          )}
           <div className="samples">
             {SAMPLES.map((sample) => (
               <button
@@ -475,6 +803,17 @@ export function App() {
             {activity.timing === "estimated" ? " · pace estimated" : ""}
           </p>
           {activity.source === "sample" ? <div className="badge">SAMPLE ROUTE</div> : null}
+          {activity.source === "strava" ? (
+            <a
+              className="view-strava"
+              href={`https://www.strava.com/activities/${activity.id.slice("strava-".length)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View on Strava
+            </a>
+          ) : null}
+          {deletionNote ? <div className="notice">{deletionNote}</div> : null}
           {error ? <div className="error">{error}</div> : null}
         </section>
 
@@ -569,6 +908,63 @@ export function App() {
           {usesMap && activity.source === "sample" ? (
             <p className="hint tight">Sample routes follow real streets in New York and Marin.</p>
           ) : null}
+        </section>
+
+        <section>
+          <div className="section-label">TRACE</div>
+          <div className="sub-label">Draw</div>
+          <div className="seg two" role="radiogroup" aria-label="Draw speed">
+            <button aria-pressed={ease <= 0} onClick={() => setEase(0)}>
+              Linear
+            </button>
+            <button
+              aria-pressed={ease > 0}
+              onClick={() => setEase(easeAmount.current > 0 ? easeAmount.current : 1)}
+            >
+              Eased
+            </button>
+          </div>
+          {ease > 0 ? (
+            <Slider
+              label="Ease"
+              value={ease}
+              min={0.05}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(v) => {
+                easeAmount.current = v;
+                setEase(v);
+              }}
+            />
+          ) : null}
+          <div className="toggles">
+            <button className="chip" aria-pressed={showDistanceTip} onClick={() => setShowDistanceTip((v) => !v)}>
+              Distance label
+            </button>
+          </div>
+          <div className="sub-label">Hide start and end</div>
+          <Slider
+            label="Distance"
+            value={Math.min(privacyM, privacyMax)}
+            min={0}
+            max={Math.max(privacyMax, privacyStep)}
+            step={privacyStep}
+            format={(v) => formatPrivacy(v, units)}
+            onChange={setPrivacyM}
+          />
+          <div className="seg two" role="radiogroup" aria-label="Privacy style">
+            <button aria-pressed={privacy === "fade"} onClick={() => setPrivacy("fade")}>
+              Fade
+            </button>
+            <button aria-pressed={privacy === "omit"} onClick={() => setPrivacy("omit")}>
+              Cut
+            </button>
+          </div>
+          <p className="hint tight">
+            Fades or cuts the map within this distance of the start and finish, the way Strava hides the ends of a route.
+            Stats still cover the whole activity.
+          </p>
         </section>
 
         <section>
@@ -673,6 +1069,15 @@ export function App() {
             </button>
           </div>
           <Slider
+            label="Camera distance"
+            value={camera}
+            min={0.4}
+            max={2.5}
+            step={0.05}
+            format={(v) => `${v.toFixed(2)}×`}
+            onChange={setCamera}
+          />
+          <Slider
             label="Line weight"
             value={lineWidth}
             min={0.7}
@@ -695,8 +1100,19 @@ export function App() {
         </section>
 
         <p className="hint">
-          Export a GPX from Strava: open an activity, choose the menu, then Export GPX. Drop it anywhere on this page.
-          Space plays the draw-on. Arrow keys nudge the timeline.
+          Connect with Strava to pick a past activity, or drop a GPX anywhere on this page. Space plays the draw-on. Arrow
+          keys nudge the timeline.
+        </p>
+        <p className="legal-links">
+          <a href="#privacy">Privacy</a>
+          <a href="#terms">Terms</a>
+          <a href="https://github.com/CatchGoogle/strava/issues" target="_blank" rel="noreferrer">
+            Support
+          </a>
+          <a href="https://www.strava.com/dashboard" target="_blank" rel="noreferrer">
+            Your Strava account
+          </a>
+          <span>Compatible with Strava</span>
         </p>
       </aside>
 
@@ -779,6 +1195,35 @@ export function App() {
         </div>
       </main>
       {dragOver ? <div className="drop">Drop a GPX</div> : null}
+    </div>
+    </>
+  );
+}
+
+function StravaNotice() {
+  return (
+    <div className="notice strava-notice">
+      <p>Before connecting, TRACE will collect this from your own Strava account, in this browser only:</p>
+      <ul>
+        <li>Athlete name, activity list, distance, moving time, sport, and date</li>
+        <li>GPS, elevation, time, and heart rate for an activity you open</li>
+      </ul>
+      <p>
+        Strava sends it when you approve access. The route stays in memory for this visit. Disconnect or Delete my Strava
+        data removes that copy and then confirms the deletion. You can also revoke access at{" "}
+        <a href="https://www.strava.com/settings/apps" target="_blank" rel="noreferrer">
+          strava.com/settings/apps
+        </a>
+        . Read the <a href="#privacy">privacy notice</a> and <a href="#terms">terms</a>. Support is on{" "}
+        <a href="https://github.com/CatchGoogle/strava/issues" target="_blank" rel="noreferrer">
+          GitHub
+        </a>
+        . Your account is at{" "}
+        <a href="https://www.strava.com/dashboard" target="_blank" rel="noreferrer">
+          strava.com/dashboard
+        </a>
+        .
+      </p>
     </div>
   );
 }
