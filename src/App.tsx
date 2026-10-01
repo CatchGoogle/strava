@@ -200,6 +200,9 @@ export function App() {
     document.fonts.ready.then(async () => {
       await Promise.all([
         document.fonts.load("700 72px Syne"),
+        document.fonts.load("700 72px Figtree"),
+        document.fonts.load("600 48px Figtree"),
+        document.fonts.load("500 16px Figtree"),
         document.fonts.load('500 48px "DM Mono"'),
         document.fonts.load("500 16px Outfit"),
         document.fonts.load("600 16px Outfit"),

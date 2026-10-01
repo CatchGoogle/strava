@@ -305,7 +305,7 @@ function computeLayout(ctx: CanvasRenderingContext2D, input: RenderInput): Layou
   let size = cfg.title;
   let lines = [display];
   while (size > 34) {
-    ctx.font = `700 ${size}px Syne, sans-serif`;
+    ctx.font = `700 ${size}px Figtree, sans-serif`;
     lines = wrapLines(ctx, display, textW, wide ? 3 : 2);
     const widest = Math.max(...lines.map((line) => ctx.measureText(line).width), 0);
     if (widest <= textW) break;
@@ -708,7 +708,7 @@ function drawMarker(ctx: CanvasRenderingContext2D, x: number, y: number, r: numb
 
 function drawPill(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, theme: Theme, u: number) {
   ctx.save();
-  ctx.font = `500 ${Math.round(20 * u)}px "DM Mono", ui-monospace, monospace`;
+  ctx.font = `500 ${Math.round(20 * u)}px Figtree, sans-serif`;
   track(ctx, "0px");
   const tw = ctx.measureText(text).width;
   const padX = 14 * u;
@@ -741,7 +741,7 @@ function chartLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: n
   ctx.textAlign = align;
   ctx.textBaseline = "top";
   track(ctx, "0.18em");
-  ctx.font = `500 ${Math.round(13 * u)}px Outfit, sans-serif`;
+  ctx.font = `500 ${Math.round(13 * u)}px Figtree, sans-serif`;
   ctx.fillText(text, x, y);
   ctx.restore();
 }
@@ -946,13 +946,13 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillStyle = theme.muted;
-  track(ctx, "0.22em");
-  ctx.font = `500 ${Math.round(16 * u)}px Outfit, sans-serif`;
+  track(ctx, "0.08em");
+  ctx.font = `500 ${Math.round(16 * u)}px Figtree, sans-serif`;
   ctx.fillText(formatKicker(activity.start), L.textX, L.kickerY);
 
   ctx.fillStyle = theme.ink;
   track(ctx, "-0.03em");
-  ctx.font = `700 ${L.titleSize}px Syne, sans-serif`;
+  ctx.font = `700 ${L.titleSize}px Figtree, sans-serif`;
   const displayTitle = L.titleLines;
   displayTitle.forEach((line, i) => ctx.fillText(line, L.textX, L.titleY + i * L.titleSize * 0.98));
 
@@ -964,8 +964,8 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
       .join("   ·   ")
       .toUpperCase();
     ctx.fillStyle = theme.muted;
-    track(ctx, "0.18em");
-    ctx.font = `500 ${Math.round(16 * u)}px Outfit, sans-serif`;
+    track(ctx, "0.08em");
+    ctx.font = `500 ${Math.round(16 * u)}px Figtree, sans-serif`;
     ctx.fillText(sub, L.textX, L.subY);
   }
   ctx.restore();
@@ -1002,14 +1002,14 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
   const unitSize = Math.round(L.heroSize * 0.2);
   let heroSize = L.heroSize;
   track(ctx, "0px");
-  ctx.font = `700 ${unitSize}px Outfit, sans-serif`;
+  ctx.font = `700 ${unitSize}px Figtree, sans-serif`;
   const unitW = ctx.measureText(finalHero.label).width + unitSize * 0.12 * finalHero.label.length;
   for (;;) {
-    ctx.font = `700 ${heroSize}px Syne, sans-serif`;
+    ctx.font = `700 ${heroSize}px Figtree, sans-serif`;
     if (tabularWidth(ctx, finalHero.value) + 20 * u + unitW <= colW || heroSize <= 56) break;
     heroSize -= 4;
   }
-  ctx.font = `700 ${heroSize}px Syne, sans-serif`;
+  ctx.font = `700 ${heroSize}px Figtree, sans-serif`;
   const heroBase = L.statsTop + heroSize * 0.72;
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = theme.ink;
@@ -1017,7 +1017,7 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
   const numW = tabularWidth(ctx, finalHero.value);
   ctx.fillStyle = theme.muted;
   track(ctx, "0.12em");
-  ctx.font = `600 ${unitSize}px Outfit, sans-serif`;
+  ctx.font = `600 ${unitSize}px Figtree, sans-serif`;
   ctx.fillText(hero.label, L.textX + numW + 20 * u, heroBase);
 
   const row = rowStats(input, dist);
@@ -1026,12 +1026,12 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
     const x = L.textX + i * colWidth;
     track(ctx, "0px");
     ctx.fillStyle = theme.ink;
-    ctx.font = `500 ${L.rowSize}px "DM Mono", ui-monospace, monospace`;
+    ctx.font = `500 ${L.rowSize}px Figtree, sans-serif`;
     ctx.textBaseline = "alphabetic";
     drawTabular(ctx, stat.value, x, L.rowTop + L.rowSize * 0.72);
     ctx.fillStyle = theme.muted;
     track(ctx, "0.16em");
-    ctx.font = `500 ${Math.round(13 * u)}px Outfit, sans-serif`;
+    ctx.font = `500 ${Math.round(13 * u)}px Figtree, sans-serif`;
     ctx.fillText(stat.label, x, L.rowTop + L.rowSize * 0.72 + 24 * u);
   });
   ctx.restore();
@@ -1044,7 +1044,7 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
   if (input.signature.trim()) {
     ctx.globalAlpha = signA * (theme.mode === "dark" ? 0.82 : 0.72);
     ctx.fillStyle = theme.muted;
-    ctx.font = `500 ${Math.round(15 * u)}px Outfit, sans-serif`;
+    ctx.font = `500 ${Math.round(15 * u)}px Figtree, sans-serif`;
     ctx.textAlign = L.wide ? "left" : "right";
     ctx.fillText(input.signature.trim().toUpperCase(), L.wide ? L.padX : w - L.padX, L.footerY);
   }
@@ -1052,7 +1052,7 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
     ctx.globalAlpha = 0.62;
     ctx.fillStyle = theme.muted;
     track(ctx, "0.02em");
-    ctx.font = `400 ${Math.round(12 * u)}px Outfit, sans-serif`;
+    ctx.font = `400 ${Math.round(12 * u)}px Figtree, sans-serif`;
     ctx.textAlign = L.wide ? "right" : "left";
     ctx.fillText(attribution, L.wide ? w - 72 : L.padX, L.footerY);
   }
