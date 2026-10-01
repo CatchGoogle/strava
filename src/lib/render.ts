@@ -912,9 +912,6 @@ export function renderCard(ctx: CanvasRenderingContext2D, input: RenderInput) {
   if (input.showGrid && !hasMap && !is3d) drawDots(ctx, w, h, theme);
   drawFinish(ctx, w, h, theme, input.showGrain);
 
-  ctx.fillStyle = theme.ramp[2];
-  ctx.fillRect(0, 0, w, Math.max(6, 8 * u));
-
   /* route */
   if (clipRoute) {
     ctx.save();
